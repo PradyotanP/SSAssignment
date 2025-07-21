@@ -3,48 +3,54 @@ using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
+    // Movement Settings
     [Header("Movement")]
-    public float maxSpeed = 8f;
-    public float strafeSpeed = 5f;
-    public float acceleration = 10f;
+    public float maxSpeed = 8f;           // Maximum movement speed
+    public float strafeSpeed = 5f;        // (Unused in current script)
+    public float acceleration = 10f;      // Acceleration rate
 
+    // Jump Settings
     [Header("Jump")]
-    public float jumpForce = 20f;
-    public Transform groundCheck;
-    public float groundCheckRadius = 0.6f;
-    public LayerMask groundLayer;
-    private bool isGrounded;
-    private bool jumpRequested;
-    private float lastJumpTime;
-    private float jumpCooldown = 0.1f;
+    public float jumpForce = 20f;         // Force applied when jumping
+    public Transform groundCheck;         // Ground check reference point (not used here directly)
+    public float groundCheckRadius = 0.6f;// Distance to check for the ground
+    public LayerMask groundLayer;         // Layer considered as ground
+    private bool isGrounded;              // Whether the player is grounded
+    private bool jumpRequested;           // Flag to handle jump input
+    private float lastJumpTime;           // Time of the last jump
+    private float jumpCooldown = 0.1f;    // Cooldown between jumps
 
+    // Joystick Input
     [Header("Joystick Input")]
-    public FloatingJoystick joystick;
-    public float deadZone = 0.1f;
+    public FloatingJoystick joystick;     // Reference to the floating joystick
+    public float deadZone = 0.1f;         // Threshold to ignore small inputs
 
+    // Audio Settings
     [Header("Sound")]
-    public AudioClip jumpClip;
-    public AudioClip hitClip;
-    public AudioClip bgmClip;
-    private AudioSource sfxSource;
-    private AudioSource bgmSource;
+    public AudioClip jumpClip;            // Jump sound effect
+    public AudioClip hitClip;             // Hit/death sound effect
+    public AudioClip bgmClip;             // Background music clip
+    private AudioSource sfxSource;        // Source for playing sound effects
+    private AudioSource bgmSource;        // Source for playing background music
 
+    // Visual Effects
     [Header("VFX")]
-    public ParticleSystem movementVFX;
-    public GameObject deathVFX;
+    public ParticleSystem movementVFX;    // Dust or movement effect
+    public GameObject deathVFX;           // Visual effect on death
 
+    // Player State Flags
     [Header("Control Flags")]
-    public bool isControllable = true;
-    public bool isDead;
+    public bool isControllable = true;    // Whether the player can move
+    public bool isDead;                   // Whether the player is dead
 
-    private Rigidbody rb;
-    private Vector3 inputDirection;
+    private Rigidbody rb;                 // Rigidbody component
+    private Vector3 inputDirection;       // Input direction for movement
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
 
-        // Audio setup
+        // Set up audio sources for SFX and BGM
         sfxSource = gameObject.AddComponent<AudioSource>();
         bgmSource = gameObject.AddComponent<AudioSource>();
         bgmSource.clip = bgmClip;
@@ -57,31 +63,21 @@ public class PlayerController : MonoBehaviour
     {
         if (!isControllable) return;
 
-        CheckGround();
+        CheckGround();  // Update grounded status
 
-//#if UNITY_EDITOR
-//        HandleEditorInput();
-//        if (Keyboard.current.spaceKey.wasPressedThisFrame)
-//        {
-//            Jump();
-//        }
-//#else
-//    HandleMobileInput();
-//#endif
+        HandleMobileInput(); // Use joystick input on mobile
 
-        HandleMobileInput();
-
-        // Handle jump
+        // Handle jump if requested
         if (jumpRequested && isGrounded && Time.time - lastJumpTime > jumpCooldown)
         {
-            rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            sfxSource.PlayOneShot(jumpClip);
+            rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z); // Reset vertical velocity
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse); // Apply jump force
+            sfxSource.PlayOneShot(jumpClip); // Play jump sound
             jumpRequested = false;
             lastJumpTime = Time.time;
         }
 
-        // Movement VFX
+        // Control movement particle effect
         if (movementVFX != null)
         {
             if (inputDirection.magnitude > 0.1f && isGrounded)
@@ -96,28 +92,30 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        // Fall off
+        // Trigger game over if player falls below a threshold
         if (transform.position.y < -5f)
         {
             FindObjectOfType<GameManager>().EndRun();
         }
     }
 
-
     void FixedUpdate()
     {
         if (!isControllable) return;
 
+        // Smooth movement physics using force
         Vector3 targetVelocity = inputDirection * maxSpeed;
         Vector3 velocityChange = targetVelocity - new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
         rb.AddForce(new Vector3(velocityChange.x, 0, velocityChange.z) * acceleration, ForceMode.Acceleration);
     }
 
+    // Check if player is on the ground
     void CheckGround()
     {
         isGrounded = Physics.Raycast(transform.position, Vector3.down, groundCheckRadius + 0.1f, groundLayer);
     }
 
+    // Public method to trigger a jump
     public void Jump()
     {
         if (isGrounded)
@@ -126,8 +124,10 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // Control whether the player can move
     public void SetControllable(bool state) => isControllable = state;
 
+    // Handle input from mobile joystick
     private void HandleMobileInput()
     {
         if (joystick != null)
@@ -141,7 +141,7 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-
+    // Optional: Handle keyboard input for editor testing
     private void HandleEditorInput()
     {
         float h = Input.GetAxis("Horizontal");
@@ -149,24 +149,28 @@ public class PlayerController : MonoBehaviour
         inputDirection = new Vector3(h, 0, v).normalized;
     }
 
+    // Freeze/unfreeze the player movement (for replay)
     public void FreezePlayer(bool freeze)
     {
         rb.isKinematic = freeze;
         isControllable = !freeze;
     }
 
+    // Handle collision with obstacles
     void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("Obstacle") && !isDead)
         {
-            sfxSource.PlayOneShot(hitClip);
+            sfxSource.PlayOneShot(hitClip); // Play death sound
             isDead = true;
 
+            // Play death VFX if assigned
             if (deathVFX != null)
             {
                 Instantiate(deathVFX, transform.position, Quaternion.identity);
             }
 
+            // End the run
             FindObjectOfType<GameManager>().EndRun();
         }
     }
